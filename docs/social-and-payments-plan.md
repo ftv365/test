@@ -2,7 +2,17 @@
 
 > Scope: Add **social media connections** to the **Fan**, **Talent**, and **Venue** pages,
 > plus **Venmo & Zelle** connections so fans can tip and pay talent.
-> This doc is a menu of options + a phased build plan. Nothing here is locked — pick the tiers you want.
+> This doc is a menu of options + a phased build plan.
+
+## ✅ Locked decisions (v1)
+
+- **Payment model: Handle Handoff (Model A).** Talent/venue connect their own Venmo/Zelle handle; fans pay
+  them **directly** via deep link / QR. Myrtle365 is never in the money flow.
+- **Platform cut: none — 100% of every tip goes to talent.** Monetize elsewhere (subscriptions, booking
+  fees) later. This keeps Venmo/Zelle native and avoids money-transmission/KYC burden.
+- **v1 tipping features: (1) Presets + QR tip jar, (2) Superfan leaderboard + badges.**
+  Song requests and tip goals are deferred to a later phase.
+- Everything below marked _(deferred)_ is out of scope for v1 but kept for the roadmap.
 
 ---
 
@@ -91,7 +101,9 @@ Venmo and Zelle are **not built to be marketplace payment processors**:
 | Compliance/liability | Low (P2P, you're a directory) | High (money transmission, KYC, 1099s, chargebacks) |
 | Build cost | Low | High |
 
-> **Recommendation:** Launch with **Model A** (Venmo/Zelle handle + QR/deep-link handoff) to get tipping live fast and validate demand. If you want to monetize the payment flow itself, add **Model B via Stripe Connect** later as the "official" processed rail, keeping Venmo/Zelle as the free P2P option.
+> **✅ Chosen: Model A.** Venmo/Zelle handle + QR/deep-link handoff, **0% platform cut, 100% to talent.**
+> Model B (Stripe Connect, processed) is _(deferred)_ — kept in the roadmap only if we later decide to
+> monetize the payment flow or need escrow/1099s.
 
 ### 3b. Where tipping/pay lives
 - **Talent page:** persistent "Tip / Support" button.
@@ -100,15 +112,22 @@ Venmo and Zelle are **not built to be marketplace payment processors**:
 - **Live/event context:** tip button during a live set.
 
 ### 3c. Tipping ideas (features)
-- **Tip jar with presets** — $5 / $10 / $20 / custom, one-tap.
+
+**In v1:**
+- **Tip jar with presets** — $5 / $10 / $20 / custom, one-tap, then deep-link/QR to the artist's Venmo/Zelle.
 - **QR at the venue** — table tent / stage sign → opens the artist's tip flow.
-- **Song requests** — pay to request a song; tip extra to bump it up the queue (revenue + engagement).
-- **Post-show prompt** — "Loved the show? Tip [Artist]." push/notification after an event.
-- **Goals / crowdfunding** — talent sets a goal (new EP, tour van) with a progress bar fed by tips.
 - **Superfan leaderboard + badges** — top tippers get shoutouts, badges, maybe perks (early access, meet-ups).
+  - Note: with handle-handoff, we don't see the money move, so tips are **self-/artist-confirmed** for the
+    leaderboard (e.g. fan taps "I tipped," artist can confirm, or count tip-flow opens). Good enough for v1;
+    exact amounts become authoritative only under processed payments _(deferred)_.
+
+**Deferred (later phases):**
+- **Song requests** — pay to request a song; tip extra to bump it up the queue.
+- **Post-show prompt** — "Loved the show? Tip [Artist]." push after an event.
+- **Goals / crowdfunding** — talent sets a goal (new EP, tour van) with a progress bar.
 - **Split tips** — one tip split across a band/lineup by preset shares.
-- **"Round up" / cover the fee** — fan optionally covers processing so artist gets the full amount.
-- **Recurring support** — monthly patron tier per artist (Model B / Stripe only).
+- **"Round up" / cover the fee** — relevant only under processed payments.
+- **Recurring support** — monthly patron tier per artist (processed / Stripe only).
 - **Gift a tip** — fan tips on behalf of a friend, with a note.
 
 ### 3d. Paying talent (venue → talent)
@@ -143,24 +162,25 @@ TipGoal (id, talent_id, title, target_amount, current_amount, ends_at)
 
 ## 5. Phased roadmap
 
-**Phase 1 — Link-only social + handle-handoff tipping (fast)**
+**Phase 1 — v1 (link-only social + handle-handoff tipping) ← locked scope**
 - SocialConnection (link mode) on Fan/Talent/Venue; unified social bar; "Follow everywhere."
-- PaymentHandle (Venmo/Zelle) + tip button + QR + deep links. Presets + custom amount.
+- PaymentHandle (Venmo/Zelle) + tip button + **presets/custom amount** + **QR + deep links**, 0% cut.
+- **Superfan leaderboard + badges** (self-/artist-confirmed tip counts).
 
-**Phase 2 — Data-rich social + tipping engagement**
+**Phase 2 — Data-rich social + tipping engagement _(deferred)_**
 - OAuth for Instagram/TikTok/YouTube/Spotify → content feed, follower counts, verification.
-- Tip goals, leaderboard, song requests, post-show prompts.
+- Tip goals, song requests, post-show prompts.
 
-**Phase 3 — Ranking, growth, processed payments**
+**Phase 3 — Ranking, growth, processed payments _(deferred)_**
 - Clout score → search ranking + recommendations; growth analytics.
 - Stripe Connect (Model B) for processed tips, recurring patron tiers, venue→talent escrow payouts, 1099s.
 
 ---
 
-## 6. Decisions I need from you
+## 6. Decisions — resolved ✅
 
-1. **Payment model:** Handle-handoff (A) only, or add processed payments (B) with a platform fee?
-2. **Launch platforms:** Confirm Instagram / TikTok / YouTube / Spotify first?
-3. **Do you want a platform cut** of tips? (Determines A vs B and legal setup.)
-4. **Song-request tipping** — in or out for v1? (High engagement, a bit more build.)
-5. **Recurring/patron support** — needed at launch, or later?
+1. **Payment model:** Handle-handoff (Model A) only for v1. ✅
+2. **Platform cut:** None — 100% to talent. ✅
+3. **v1 tipping features:** Presets + QR, and Superfan leaderboard + badges. ✅
+4. **Launch social platforms:** Instagram / TikTok / YouTube / Spotify (proposed — confirm anytime).
+5. **Song requests / tip goals / recurring:** deferred to later phases. ✅
