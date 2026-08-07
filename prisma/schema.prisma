@@ -1,0 +1,117 @@
+// Myrtle365 staging schema.
+// SQLite is used for staging/local so the whole environment is `npm run setup`
+// away. Postgres is the intended production target — no SQLite-only features
+// are used here, so the provider swap is a one-line change.
+//
+// Prisma does not support native enums on SQLite, so enum-ish columns are
+// stored as String and constrained in TypeScript (see src/lib/enums.ts).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id          String   @id @default(cuid())
+  /// ProfileType: "fan" | "talent" | "venue"
+  type        String
+  slug        String   @unique
+  displayName String
+  tagline     String?
+  bio         String?
+  city        String?
+  /// Comma-separated genre tags, e.g. "beach music,cover band"
+  genres      String?
+  avatarUrl   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  socialConnections SocialConnection[]
+  paymentHandles    PaymentHandle[]
+  tipsSent          Tip[]              @relation("TipsSent")
+  tipsReceived      Tip[]              @relation("TipsReceived")
+
+  @@index([type])
+}
+
+model SocialConnection {
+  id        String @id @default(cuid())
+  profileId String
+  /// SocialPlatform: instagram | tiktok | youtube | spotify | ...
+  platform  String
+  handle    String
+  url       String
+  /// ConnectionMode: "link" (v1) | "oauth" (phase 2)
+  mode      String @default("link")
+
+  // Phase 2 (OAuth) fields — present so the link-only rows can be upgraded
+  // in place without a destructive migration.
+  followerCount Int?
+  verified      Boolean   @default(false)
+  lastSyncedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, platform])
+}
+
+model PaymentHandle {
+  id              String  @id @default(cuid())
+  profileId       String
+  /// PaymentProvider: "venmo" | "zelle" (v1). stripe/paypal are phase 3.
+  provider        String
+  /// Venmo username (no @) or Zelle email/phone.
+  handleOrAccount String
+  /// Optional uploaded QR image. Venmo QRs we generate ourselves from the
+  /// deep link; Zelle QRs can only come from the user's own banking app, so
+  /// this is where they upload it.
+  qrAssetUrl      String?
+  /// True when this handle is used to PAY OUT (venue -> talent) rather than
+  /// to receive fan tips.
+  isPayout        Boolean @default(false)
+  verified        Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, provider, isPayout])
+}
+
+/// A tip is a RECORD OF INTENT, not a settled payment.
+///
+/// Under the locked v1 model (Handle Handoff), money moves directly from fan
+/// to talent inside Venmo/Zelle — Myrtle365 never sees it. So a Tip row starts
+/// as "opened" when the fan launches the handoff, becomes "self_reported" when
+/// the fan taps "I tipped", and only reaches "artist_confirmed" when the
+/// recipient confirms it. Leaderboards must never present these as audited
+/// amounts. See docs/social-and-payments-plan.md §3c.
+model Tip {
+  id          String @id @default(cuid())
+  fromFanId   String?
+  toTalentId  String
+  amountCents Int
+  currency    String @default("USD")
+  /// PaymentProvider used for the handoff.
+  provider    String
+  /// TipContext: "profile" | "event" | "venue_qr"
+  context     String @default("profile")
+  eventId     String?
+  note        String?
+  /// TipStatus: "opened" | "self_reported" | "artist_confirmed" | "disputed"
+  status      String @default("opened")
+
+  createdAt   DateTime  @default(now())
+  confirmedAt DateTime?
+
+  fromFan  Profile? @relation("TipsSent", fields: [fromFanId], references: [id], onDelete: SetNull)
+  toTalent Profile  @relation("TipsReceived", fields: [toTalentId], references: [id], onDelete: Cascade)
+
+  @@index([toTalentId, status])
+  @@index([fromFanId, status])
+}

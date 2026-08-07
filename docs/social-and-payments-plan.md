@@ -3,6 +3,10 @@
 > Scope: Add **social media connections** to the **Fan**, **Talent**, and **Venue** pages,
 > plus **Venmo & Zelle** connections so fans can tip and pay talent.
 > This doc is a menu of options + a phased build plan.
+>
+> **Status:** Phase 1 (the locked v1 scope below) is implemented in this repo — see
+> [`../README.md`](../README.md) for how to run it and what's deliberately left out.
+> Phases 2 and 3 remain unbuilt.
 
 ## ✅ Locked decisions (v1)
 
@@ -21,7 +25,8 @@
 - Myrtle365 is a live-entertainment marketplace with three profile types: **Fan**, **Talent**, **Venue**.
 - "Scoca media" = **social media** connections (Instagram, TikTok, YouTube, Spotify, etc.).
 - Goal is twofold: (a) richer, more credible profiles + discovery, and (b) letting money flow from fans → talent.
-- Repo is currently empty, so this is a greenfield design — no existing schema to conform to.
+- This started as a greenfield design with no existing schema to conform to. The schema sketched in
+  §4 is now live in `prisma/schema.prisma` (minus `TipGoal`, which is deferred with tip goals).
 
 ---
 
