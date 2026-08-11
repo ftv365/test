@@ -311,7 +311,7 @@ play: sell at service prices, migrate to software margins.
 
 The sharpest use of this isn't revenue — it's acquisition and cold-start.
 
-**Give Show Desk away to every founding member during the Oct–Nov pre-sale (§5, phase 1).**
+**Give Show Desk away to every founding member during the Oct–Nov pre-sale (§6, phase 1).**
 "Send us your fall schedule and we'll build your page" is a dramatically better sales pitch
 than "sign up for our website," and it seeds the event data that makes the site worth visiting
 before we ask a single fan to show up. It converts the sale and fills the database in one
@@ -325,7 +325,8 @@ the accounts most likely to keep paying for it.
 ⚠️ **We have no events model at all.** README gap #5: `Tip.eventId` exists in the schema but
 nothing populates it. Show Desk needs, in order:
 
-1. An `Event` model and event pages (a prerequisite for §1's "events posted / month" limits
+1. An `Event` model and event pages — the same model the fan-side calendar feeds in §5 run on,
+   and a prerequisite for §1's "events posted / month" limits
    too — those tiers can't ship without it either).
 2. Auth and verified account emails, so senders can be matched.
 3. An internal admin queue — inbox, parse preview, approve/edit/reject, reply. This is real
@@ -338,7 +339,117 @@ we want Show Desk live for the founding cohort in October, the Event model needs
 
 ---
 
-## 5. Rollout timeline
+## 5. Fans: shows straight into their own calendar
+
+Show Desk gets events *into* Myrtle365. This is the other half — getting them *out*, into the
+calendar app the fan already lives in, with reminders.
+
+**The two halves share one `Event` model.** That's the argument for building it now: one piece
+of schema underwrites the revenue feature (§4) and the retention feature (this one). Fan-side
+calendar is free forever — we never paywall the fan.
+
+### Two mechanisms, and the difference matters
+
+**1. One-off "Add to Calendar"** — the fan adds a single show. Either a downloaded `.ics` or a
+deep link into their web calendar. It's a **copy**: a snapshot taken at that moment. When the
+show is rescheduled or rained out, their calendar is silently wrong. Fine for a single event,
+but do not mistake it for the real feature.
+
+**2. Subscribed feed** (`webcal://` / ICS subscription) — the fan subscribes to a URL, their
+calendar re-polls it, and our changes propagate. "Follow this venue's calendar." "Follow this
+artist." "My Myrtle365 shows."
+
+> The subscribed feed is the strategic one. A venue's entire season landing in a fan's calendar
+> app is Myrtle365 living on their phone all summer without them opening anything. It's also
+> the exact mirror of the iCal ingestion proposed for venues in §4 — same library, both
+> directions.
+
+Build both; lead with the feed.
+
+### Buttons to put on a show
+
+Offer an explicit list rather than sniffing the platform — detection is unreliable and plenty
+of people keep more than one calendar.
+
+| Target | One-off | Subscribe |
+|---|---|---|
+| **Apple / iOS** | `.ics` download (native) | `webcal://` URL |
+| **Google** | `calendar.google.com/calendar/render?action=TEMPLATE&…` | `calendar.google.com/calendar/r?cid=<encoded ICS url>` |
+| **Outlook.com** | `outlook.live.com/calendar/0/deeplink/compose?…` | "Add calendar from internet" + URL |
+| **Office 365** | `outlook.office.com/calendar/0/deeplink/compose?…` | same |
+| **Yahoo / other** | render URL, else `.ics` | `.ics` URL |
+
+`.ics` download is the universal fallback — it works with everything, including desktop clients
+nobody thought about.
+
+### ⚠️ Reminders don't work the way people assume
+
+This is the part of the ask that needs a caveat.
+
+You can embed `VALARM` blocks in the `.ics` (say, one day before and two hours before), and
+**Apple Calendar honors them**. But:
+
+- **Google Calendar largely ignores alarms on imported and subscribed events** and applies the
+  user's own default notification settings instead.
+- **Outlook is inconsistent** — usually honors a reminder on direct import, much more limited on
+  subscribed calendars.
+
+So we cannot promise "with reminders" and have it be true for Google users, who will be a large
+share of the audience.
+
+**The answer: embed sensible VALARMs as a best-effort bonus, and run our own notifications as
+the actual reminder system.** A Myrtle365 push or text — *"Tonight, 8pm: The Tidewaters at
+Crabby Mike's"* — is reliable, arrives on every platform, and brings the fan back to us rather
+than to their calendar app. It's also the inventory behind the **$19 "Tonight" push** already
+priced in §3. Describe the feature honestly in the UI: "Add to calendar" plus a separate
+"Remind me" toggle that we own.
+
+### Feed design — the details that bite
+
+- **Per-fan private feed** at an unguessable token, e.g. `/f/<opaque-token>.ics`, never the
+  fan's slug. Calendar URLs get shared, forwarded, and leak; this one reveals where someone is
+  going to be on a Friday night. Make it revocable and let them roll it.
+- **Per-venue and per-talent public feeds** at `/p/<slug>/calendar.ics` (+ `webcal://`).
+- **A citywide "Tonight on the Grand Strand" feed** — a genuinely good growth surface, and it
+  gives the promoted-placement inventory somewhere else to live.
+- **Stable `UID` per event, forever.** Regenerate UIDs on republish and every subscriber gets
+  permanent duplicates. This is the classic way ICS feeds get ruined, and it's unfixable after
+  the fact.
+- **Bump `SEQUENCE` on every change**, and publish cancellations as `STATUS:CANCELLED` kept in
+  the feed for a couple of weeks rather than silently dropping the row — that's what makes
+  clients actually remove it.
+- `DTSTAMP`, `LAST-MODIFIED`, `TZID=America/New_York`, `X-WR-CALNAME` for the display name, and
+  a `REFRESH-INTERVAL;VALUE=DURATION:PT6H` + `X-PUBLISHED-TTL` hint. Serve `ETag` and honor
+  conditional requests.
+- **Google polls external feeds slowly** — commonly several hours, sometimes a day or more, and
+  the refresh hint is only a hint. Never rely on the feed for a same-day cancellation; that's
+  what our own push is for.
+
+### Where it shows up
+
+- **On a show:** "Add to calendar" + "Remind me."
+- **Going / Interested** on a show → lands in the fan's "My shows," which flows into their
+  personal feed automatically. One tap, no calendar decision required.
+- **On a venue or talent page:** "Follow this calendar" next to the existing follow-everywhere
+  social bar.
+- **On the fan profile:** "My shows," with the subscribe button and the `.ics` download.
+- **On the printed table tent:** the existing venue QR can carry the calendar feed alongside the
+  tip jar — a fan scanning at the bar walks out with the venue's whole season.
+
+### Why it's worth building even though fans pay nothing
+
+- **It makes the paid side actually work.** Shows that land in real calendars produce real
+  attendance. That's the outcome Venue Pro and Marquee are selling; without it we're selling a
+  listing nobody sees twice.
+- **It generates the best stat we have.** "142 fans added this show" is intent data — sellable
+  back to venues, usable as a ranking signal, and a far better Premier feature than 250 GB of
+  storage.
+- **It's cheap.** ICS generation is a few hundred lines and no third-party service. Once
+  `Event` exists, this is small.
+
+---
+
+## 6. Rollout timeline
 
 Today is **August 2026** — the season is nearly over. Dropping a paywall now would ask people
 to start paying exactly as their income stops. Don't. Use the off-season to build and pre-sell,
@@ -346,17 +457,17 @@ and switch on billing ahead of next season.
 
 | Phase | When | What happens |
 |---|---|---|
-| **0. Instrument** | Aug–Sep 2026 | Everything stays free. Build the entitlements layer and usage metering. **Start the `Event` model now** — Show Desk and the tier event limits both block on it (§4). Capture end-of-season activity data *while venues still care*. Interview 15 talent + 10 venues on price. |
+| **0. Instrument** | Aug–Sep 2026 | Everything stays free. Build the entitlements layer and usage metering. **Start the `Event` model now** — Show Desk (§4), the fan calendar feeds (§5), and the tier event limits all block on it. Capture end-of-season activity data *while venues still care*. Interview 15 talent + 10 venues on price. |
 | **1. Founding pre-sale** | Oct–Nov 2026 | Offer **C** — annual only, 50% off year one, price locked for life while continuous. Cap it: **first 100 talent, first 25 venues.** Lead the pitch with **free Show Desk** — "send us your fall schedule and we'll build your page" (§4). Off-season is when venues plan next summer's bookings, so this is when it lands. Real cash, real validation, and the event data seeded in one motion. |
-| **2. Build & publish** | Dec 2026–Jan 2027 | Ship add-ons and metering. Onboard founders. **Publish the public price list with "list prices effective March 1"** — advance notice converts fence-sitters into founders. |
+| **2. Build & publish** | Dec 2026–Jan 2027 | Ship add-ons and metering. Onboard founders. **Ship the fan calendar feeds (§5)** — free, and it makes the founders' seeded events immediately worth something to fans. **Publish the public price list with "list prices effective March 1"** — advance notice converts fence-sitters into founders. |
 | **3. Paywall on** | Feb 2027 | New signups hit the paid tiers. **Show Desk becomes paid** — founders who had it free are the likeliest converts. Every existing user gets a **90-day Pro trial ending May 31**, so they experience Pro through the start of peak season and decide when they're making money. |
-| **4. Season Pass** | Mar 2027 | Option **D** goes on sale as the season opens. Peak season is peak willingness to pay. |
+| **4. Season Pass** | Mar 2027 | Option **D** goes on sale as the season opens. Peak season is peak willingness to pay. Turn on **"Remind me" push** (§5) in time for the first big weekends — it's also the inventory behind the $19 "Tonight" send. |
 | **5. Metered upsells** | Jun 2027 | Turn on broadcasting packs and overage once the base subscription is stable. Don't debug billing and metering at the same time. |
 | **6. First price review** | Sep 2027 | Venue Pro $49 → $79 if the calendar-fill data supports it. Founders grandfathered, 60 days notice, existing annual terms honored. |
 
 ---
 
-## 6. Policies to decide before launch
+## 7. Policies to decide before launch
 
 - **Pause, don't cancel.** Monthly subscribers can pause up to **4 months per year** — profile
   stays live, paid features switch off, $0 charged. This is the single highest-leverage
@@ -372,7 +483,7 @@ and switch on billing ahead of next season.
 
 ---
 
-## 7. What this is worth (illustrative)
+## 8. What this is worth (illustrative)
 
 Rough sizing — **these penetration and market-size figures are estimates for shaping the
 model, not researched numbers.** Validate in Phase 0 before anyone plans around them.
@@ -400,7 +511,7 @@ important: **subscriptions alone cap out fast in one metro.** The path past ~$10
 
 ---
 
-## 8. Risks
+## 9. Risks
 
 1. **Pay-to-win ranking destroys fan trust.** If paid talent outranks better free talent,
    discovery gets worse and fans stop using us — which destroys the thing venues are paying
@@ -415,7 +526,7 @@ important: **subscriptions alone cap out fast in one metro.** The path past ~$10
 4. **Paywalling supply too early.** If we charge talent before venues are actively booking
    through the site, Pro has nothing to sell. Watch booking-request volume as the gate for
    Phase 3, not the calendar.
-5. **Seasonal churn.** Mitigated by annual, Season Pass, and pause. (§2, §5)
+5. **Seasonal churn.** Mitigated by annual, Season Pass, and pause. (§2, §6)
 6. **Sales tax.** South Carolina's treatment of SaaS/digital services needs a real answer from
    an accountant before we take the first dollar. Flagging, not advising.
 7. **Billing scope creep.** Subscriptions are **Stripe Billing** and are entirely separate
@@ -426,7 +537,7 @@ important: **subscriptions alone cap out fast in one metro.** The path past ~$10
 
 ---
 
-## 9. Implementation sketch (for whenever we build it)
+## 10. Implementation sketch (for whenever we build it)
 
 Fits the existing conventions — string-union "enums" in `src/lib/enums.ts`, mirrored in
 `prisma/schema.prisma`.
@@ -451,16 +562,30 @@ AddOn          subscriptionId, key, quantity, unitPriceCents, activeFrom/To
 UsageRecord    profileId, metric (storage_bytes | video_seconds |
                broadcast_seconds | photos | shows_entered), value, periodStart
 
-// Show Desk (§4) — blocked on an Event model, which does not exist yet
+// The shared prerequisite: Show Desk (§4) and fan calendars (§5) both
+// need this, and it does not exist yet.
 Event          profileId (venue), talentId?, startsAt, endsAt?, title,
-               coverCents?, status (draft|published|canceled), sourceId?
+               coverCents?, status (draft|published|canceled), sourceId?,
+               icalUid  // STABLE FOR LIFE — see below
+               sequence Int @default(0)
                @@unique([profileId, startsAt, talentId])   // dedupe key
 
 ShowSubmission id, fromEmail, profileId?, receivedAt, channel
                (email | sms | ical | sheet), attachmentUrls,
                parsedRows Json, status (needs_review | published |
                rejected | needs_info), reviewedBy, repliedAt
+
+// Fan side (§5)
+EventInterest  fanId, eventId, level (going | interested), createdAt
+               @@unique([fanId, eventId])
+
+CalendarFeed   id, ownerProfileId, kind (fan | venue | talent | citywide),
+               token @unique, revokedAt?, lastFetchedAt
 ```
+
+Routes: `/p/[slug]/calendar.ics`, `/f/[token].ics`, `/calendar/tonight.ics`, plus a
+`src/lib/ics.ts` builder — pure and unit-testable in exactly the style of `payments.ts`, which
+is the right shape for something this fiddly.
 
 - **One entitlements module** — `src/lib/entitlements.ts`, pure and unit-tested like
   `payments.ts` and `badges.ts`. Every gate in the UI reads from it; no tier strings compared
@@ -469,5 +594,11 @@ ShowSubmission id, fromEmail, profileId?, receivedAt, channel
   locked terms are data, not a special case in code.
 - **Soft limits, not hard walls.** Over quota → "you're over, here's the pack" — never delete
   media, never cut a live stream mid-set.
+- **`Event.icalUid` is written once and never regenerated.** Not on edit, not on re-import, not
+  on a Show Desk resubmission that replaces a date range. If a UID changes, every fan subscribed
+  to that feed gets a permanent duplicate, and there is no way to clean it up from our side.
+  Worth a test that asserts it.
+- **Calendar feed tokens are secrets.** Random, revocable, never derived from the fan's slug or
+  id, and excluded from logs. A personal feed URL is a location history.
 - Requires auth first (README known gap #1). Nothing here is buildable until there's a
   signed-in user to bill.
